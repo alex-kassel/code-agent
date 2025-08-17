@@ -1,0 +1,38 @@
+{
+    "name": "alex-kassel/code-agent",
+    "description": "Laravel package for communicating with LLMs via Telegram for code development and pushing to GitHub",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Alex Kassel",
+            "email": "alex@example.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^12.0",
+        "illuminate/console": "^12.0",
+        "illuminate/http": "^12.0",
+        "irazasyed/telegram-bot-sdk": "^3.13",
+        "openai-php/client": "^0.8.0",
+        "knplabs/github-api": "^3.0",
+        "guzzlehttp/guzzle": "^7.8",
+        "symfony/http-client": "^7.0",
+        "nyholm/psr7": "^1.8"
+    },
+    "autoload": {
+        "psr-4": {
+            "AlexKassel\\CodeAgent\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "AlexKassel\\CodeAgent\\CodeAgentServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
