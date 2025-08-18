@@ -20,7 +20,16 @@ class CodeAgentServiceProvider extends ServiceProvider
         );
 
         $this->app->singleton(TelegramService::class, function ($app) {
-            return new TelegramService(config('code-agent.telegram'));
+            $config = config('code-agent.telegram');
+
+            // Only initialize if token is available
+            if (!empty($config['token'])) {
+                return new TelegramService($config);
+            }
+
+            // Return null if token is not available
+            // This will prevent initialization errors when the service is not needed
+            return null;
         });
 
         $this->app->singleton(LlmService::class, function ($app) {

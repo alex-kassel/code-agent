@@ -13,13 +13,19 @@ class TelegramWebhookCommand extends Command
     protected $description = 'Set or remove the Telegram webhook';
 
     public function __construct(
-        protected TelegramService $telegramService
+        protected ?TelegramService $telegramService = null
     ) {
         parent::__construct();
     }
 
     public function handle(): int
     {
+        // Check if TelegramService is available
+        if ($this->telegramService === null) {
+            $this->error('Telegram service is not available. Please check your configuration.');
+            return self::FAILURE;
+        }
+
         if ($this->option('remove')) {
             return $this->removeWebhook();
         }
