@@ -43,11 +43,21 @@ class GithubService
                 'encoding' => 'utf-8'
             ]);
 
+            $isEmptyRepo = false;
+            $latestCommitSha = null;
+
             try {
                 // Try to get the current reference - this will fail if the repository is empty
                 $reference = $this->client->git()->references()->show($username, $repository, "heads/{$branch}");
                 $latestCommitSha = $reference['object']['sha'];
+            } catch (\Exception $e) {
+                // Repository is likely empty or the branch doesn't exist
+                $isEmptyRepo = true;
+                Log::info('Repository appears to be empty or branch does not exist. Creating initial commit.');
+            }
 
+            if (!$isEmptyRepo) {
+                // Repository has content, proceed with normal commit
                 // Get the base tree
                 $baseTree = $this->client->git()->trees()->show($username, $repository, $latestCommitSha);
 
@@ -76,8 +86,8 @@ class GithubService
                     'sha' => $commit['sha'],
                     'force' => false
                 ]);
-            } catch (RuntimeException $e) {
-                // If we get here, the repository might be empty or the branch doesn't exist
+            } else {
+                // Repository is empty, create initial commit
                 // Create a tree without a base tree (for empty repos)
                 $tree = $this->client->git()->trees()->create($username, $repository, [
                     'tree' => [
@@ -103,18 +113,23 @@ class GithubService
                         'sha' => $commit['sha'],
                         'force' => true
                     ]);
-                } catch (RuntimeException $refException) {
+                } catch (\Exception $refException) {
                     // If the reference doesn't exist, create it
-                    $this->client->git()->references()->create($username, $repository, [
-                        'ref' => "refs/heads/{$branch}",
-                        'sha' => $commit['sha']
-                    ]);
+                    try {
+                        $this->client->git()->references()->create($username, $repository, [
+                            'ref' => "refs/heads/{$branch}",
+                            'sha' => $commit['sha']
+                        ]);
+                    } catch (\Exception $createException) {
+                        Log::error('Failed to create reference: ' . $createException->getMessage());
+                        throw new GithubException('Failed to create reference: ' . $createException->getMessage());
+                    }
                 }
             }
 
             // Return the URL to the commit
             return "https://github.com/{$username}/{$repository}/commit/{$commit['sha']}";
-        } catch (RuntimeException $e) {
+        } catch (\Exception $e) {
             Log::error('GitHub error: ' . $e->getMessage());
             throw new GithubException('Failed to commit and push: ' . $e->getMessage());
         }
