@@ -37,44 +37,80 @@ class GithubService
             // Generate a unique filename based on the commit message
             $filename = $this->generateFilename($commitMessage);
 
-            // Get the current reference
-            $reference = $this->client->git()->references()->show($username, $repository, "heads/{$branch}");
-            $latestCommitSha = $reference['object']['sha'];
-
-            // Get the base tree
-            $baseTree = $this->client->git()->trees()->show($username, $repository, $latestCommitSha);
-
             // Create a new blob with the file content
             $blob = $this->client->git()->blobs()->create($username, $repository, [
                 'content' => $code,
                 'encoding' => 'utf-8'
             ]);
 
-            // Create a new tree with the new file
-            $tree = $this->client->git()->trees()->create($username, $repository, [
-                'base_tree' => $baseTree['sha'],
-                'tree' => [
-                    [
-                        'path' => $filename,
-                        'mode' => '100644',
-                        'type' => 'blob',
-                        'sha' => $blob['sha']
+            try {
+                // Try to get the current reference - this will fail if the repository is empty
+                $reference = $this->client->git()->references()->show($username, $repository, "heads/{$branch}");
+                $latestCommitSha = $reference['object']['sha'];
+
+                // Get the base tree
+                $baseTree = $this->client->git()->trees()->show($username, $repository, $latestCommitSha);
+
+                // Create a new tree with the new file
+                $tree = $this->client->git()->trees()->create($username, $repository, [
+                    'base_tree' => $baseTree['sha'],
+                    'tree' => [
+                        [
+                            'path' => $filename,
+                            'mode' => '100644',
+                            'type' => 'blob',
+                            'sha' => $blob['sha']
+                        ]
                     ]
-                ]
-            ]);
+                ]);
 
-            // Create a new commit
-            $commit = $this->client->git()->commits()->create($username, $repository, [
-                'message' => $commitMessage,
-                'tree' => $tree['sha'],
-                'parents' => [$latestCommitSha]
-            ]);
+                // Create a new commit
+                $commit = $this->client->git()->commits()->create($username, $repository, [
+                    'message' => $commitMessage,
+                    'tree' => $tree['sha'],
+                    'parents' => [$latestCommitSha]
+                ]);
 
-            // Update the reference
-            $this->client->git()->references()->update($username, $repository, "heads/{$branch}", [
-                'sha' => $commit['sha'],
-                'force' => false
-            ]);
+                // Update the reference
+                $this->client->git()->references()->update($username, $repository, "heads/{$branch}", [
+                    'sha' => $commit['sha'],
+                    'force' => false
+                ]);
+            } catch (RuntimeException $e) {
+                // If we get here, the repository might be empty or the branch doesn't exist
+                // Create a tree without a base tree (for empty repos)
+                $tree = $this->client->git()->trees()->create($username, $repository, [
+                    'tree' => [
+                        [
+                            'path' => $filename,
+                            'mode' => '100644',
+                            'type' => 'blob',
+                            'sha' => $blob['sha']
+                        ]
+                    ]
+                ]);
+
+                // Create a new commit without parents (initial commit)
+                $commit = $this->client->git()->commits()->create($username, $repository, [
+                    'message' => $commitMessage,
+                    'tree' => $tree['sha'],
+                    'parents' => []
+                ]);
+
+                try {
+                    // Try to update the reference if it exists
+                    $this->client->git()->references()->update($username, $repository, "heads/{$branch}", [
+                        'sha' => $commit['sha'],
+                        'force' => true
+                    ]);
+                } catch (RuntimeException $refException) {
+                    // If the reference doesn't exist, create it
+                    $this->client->git()->references()->create($username, $repository, [
+                        'ref' => "refs/heads/{$branch}",
+                        'sha' => $commit['sha']
+                    ]);
+                }
+            }
 
             // Return the URL to the commit
             return "https://github.com/{$username}/{$repository}/commit/{$commit['sha']}";
