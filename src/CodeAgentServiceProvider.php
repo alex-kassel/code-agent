@@ -24,7 +24,19 @@ class CodeAgentServiceProvider extends ServiceProvider
 
             // Only initialize if token is available
             if (!empty($config['token'])) {
-                return new TelegramService($config);
+                $telegramService = new TelegramService($config);
+
+                // Inject LlmService if available
+                if ($app->has(LlmService::class) && $app->make(LlmService::class) !== null) {
+                    $telegramService->setLlmService($app->make(LlmService::class));
+                }
+
+                // Inject GithubService if available
+                if ($app->has(GithubService::class) && $app->make(GithubService::class) !== null) {
+                    $telegramService->setGithubService($app->make(GithubService::class));
+                }
+
+                return $telegramService;
             }
 
             // Return null if token is not available
@@ -33,11 +45,37 @@ class CodeAgentServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(LlmService::class, function ($app) {
-            return new LlmService(config('code-agent.llm'));
+            $config = config('code-agent.llm');
+
+            // Only initialize if API key is available
+            if (!empty($config['api_key'])) {
+                try {
+                    return new LlmService($config);
+                } catch (\Exception $e) {
+                    report($e);
+                    return null;
+                }
+            }
+
+            // Return null if API key is not available
+            return null;
         });
 
         $this->app->singleton(GithubService::class, function ($app) {
-            return new GithubService(config('code-agent.github'));
+            $config = config('code-agent.github');
+
+            // Only initialize if token is available
+            if (!empty($config['token'])) {
+                try {
+                    return new GithubService($config);
+                } catch (\Exception $e) {
+                    report($e);
+                    return null;
+                }
+            }
+
+            // Return null if token is not available
+            return null;
         });
     }
 
